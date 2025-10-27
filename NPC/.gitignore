@@ -1,0 +1,46 @@
+# ===== Unity build artifacts =====
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/UserSettings/
+
+# ===== Android build outputs =====
+/*.apk
+/**/*.apk
+/**/*.aab
+/**/*.aar
+/**/*.so
+/**/*.dbg.so
+/**/*.dSYM
+
+# ===== Unity Bee build system =====
+/Library/Bee/
+/Bee/
+/Bee*/**
+
+# ===== IL2CPP output =====
+/Library/Bee/Android/Prj/IL2CPP/
+/Library/Bee/artifacts/
+/Library/Bee/Android/**/Gradle/
+/Library/Bee/Android/**/build/
+/Library/Bee/Android/**/objcopy_*/
+
+# ===== Oculus/Meta sample assets =====
+/Assets/Oculus/Avatar2_SampleAssets/**/PresetAvatars_*.zip
+/Assets/Oculus/Avatar2_SampleAssets/**/PresetAvatars_*.zip.jar
+
+# ===== Burst compiler caches =====
+/Library/PackageCache/com.unity.burst*/
+
+# ===== Other caches =====
+/Library/PackageCache/
+/Library/ScriptAssemblies/
+/Library/PlayerDataCache/
+/Library/Il2cppBuildCache/
+
+# ===== System-specific =====
+.DS_Store
+Thumbs.db

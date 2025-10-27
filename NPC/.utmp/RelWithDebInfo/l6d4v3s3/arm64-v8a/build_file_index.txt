@@ -1,0 +1,2 @@
+/Users/maimostafa/Documents/GitHub/NPC/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/CMakeLists.txt
+/Users/maimostafa/Documents/GitHub/NPC/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/GameActivity/CMakeLists.txt
