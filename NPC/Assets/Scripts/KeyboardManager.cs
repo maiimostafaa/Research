@@ -1,60 +1,38 @@
 using UnityEngine;
-using TMPro;
 
 public class KeyboardManager : MonoBehaviour
 {
-    [SerializeField] private OVRVirtualKeyboard keyboard;
-    [SerializeField] private TMP_InputField inputField;
-    
-    private void Start()
-    {
-        // Hide keyboard initially
-        if (keyboard != null)
-        {
-            keyboard.gameObject.SetActive(false);
-        }
-        
-        // Listen for input field selection
-        if (inputField != null)
-        {
-            inputField.onSelect.AddListener(OnInputSelected);
-            inputField.onDeselect.AddListener(OnInputDeselected);
-        }
-    }
-    
-    private void OnInputSelected(string text)
-    {
-        ShowKeyboard();
-    }
-    
-    private void OnInputDeselected(string text)
-    {
-        HideKeyboard();
-    }
-    
+    [Header("Keyboard Settings")]
+    [SerializeField] private GameObject keyboardPrefab;      // Prefab of your keyboard
+    [SerializeField] private Transform keyboardSpawnPoint;   // Where you want it to appear in the scene
+
+    private GameObject activeKeyboard;
+
+    // Call this when you want to show the keyboard
     public void ShowKeyboard()
     {
-        if (keyboard != null)
+        // If there's already a keyboard, do nothing
+        if (activeKeyboard != null)
+            return;
+
+        // Spawn the keyboard at the given position and rotation
+        if (keyboardPrefab != null && keyboardSpawnPoint != null)
         {
-            keyboard.gameObject.SetActive(true);
-            // Position keyboard in front of user or near input field
-            PositionKeyboard();
+            activeKeyboard = Instantiate(keyboardPrefab, keyboardSpawnPoint.position, keyboardSpawnPoint.rotation);
+        }
+        else
+        {
+            Debug.LogWarning("Keyboard prefab or spawn point not set in Inspector.");
         }
     }
-    
+
+    // Call this when you want to hide or destroy the keyboard
     public void HideKeyboard()
     {
-        if (keyboard != null)
+        if (activeKeyboard != null)
         {
-            keyboard.gameObject.SetActive(false);
+            Destroy(activeKeyboard);
+            activeKeyboard = null;
         }
-    }
-    
-    private void PositionKeyboard()
-    {
-        // Position keyboard in front of the camera/user
-        Transform cameraTransform = Camera.main.transform;
-        keyboard.transform.position = cameraTransform.position + cameraTransform.forward * 1.5f;
-        keyboard.transform.rotation = Quaternion.LookRotation(keyboard.transform.position - cameraTransform.position);
     }
 }

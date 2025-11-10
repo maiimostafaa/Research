@@ -5,54 +5,89 @@ using OpenAI;
 using OpenAI.Chat;
 using TMPro;
 using UnityEngine;
-using Meta.WitAi.TTS.Utilities;  // add this
+// using Meta.WitAi.TTS.Utilities; // Commented out - TTS not used
 
 public class NPCChatter : MonoBehaviour
 {
     string apiKey = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-   
-    [Header("Voice Output")]
-    public TTSSpeaker speaker;   // drag your TTSSpeaker GameObject here in Inspector
+
+    // [Header("Voice Output")]
+    // public TTSSpeaker speaker;   // Commented out - TTS not used
+
+    [Header("Animation")]
+    public Animator animator;    // drag your NPC's Animator here in Inspector
+    public string isTalkingParameterName = "isTalking"; // Name of the Animator bool parameter
 
     [Header("UI")]
     public TMP_Text npcBubbleText;
     public TMP_InputField userInput;
+    public DictationInput dictationInput;
 
     [Header("Model & Style")]
-    public string model = "gpt-4o-mini";   // fast & cheaper. Try Model.GPT4o for higher quality.
+    public string model = "gpt-4o-mini";
     [TextArea(3,8)]
     public string systemPrompt = "You are a friendly in-world NPC. Answer briefly and helpfully.";
 
     readonly List<Message> history = new();
+    private StringBuilder responseBuilder = new StringBuilder();
+    
+    // Public boolean to track talking state
+    [Header("Debug")]
+    [SerializeField] private bool isTalking = false;
+    private bool isStreamingResponse = false;
 
     void Start()
     {
-    Debug.Log(apiKey);
-    history.Clear();
-    history.Add(new Message(Role.System, systemPrompt));
-    if (npcBubbleText) npcBubbleText.text = "Great work exploring the five pillars. Let’s reflect through the Knowledge pillar, which centers awareness, truth-telling, and sharing wisdom. What’s one idea or moment from today that really stuck with you?";
-;
+        Debug.Log("[NPCChatter] Start() called");
+        history.Clear();
+        history.Add(new Message(Role.System, systemPrompt));
+        if (npcBubbleText)
+            npcBubbleText.text = "Great work exploring the five pillars. Let's reflect through the Knowledge pillar, which centers awareness, truth-telling, and sharing wisdom. What's one idea or moment from today that really stuck with you?";
+        
+        // Initialize animator state
+        SetTalkingState(false, "Start()");
     }
 
     public async void OnSendClicked()
     {
-        Debug.Log("OnSendClicked has been clicked!");
+        Debug.Log("[NPCChatter] OnSendClicked() called");
         var text = userInput ? userInput.text.Trim() : null;
-        if (string.IsNullOrEmpty(text)) return;
-        if (userInput) userInput.text = "";
+        if (string.IsNullOrEmpty(text))
+        {
+            Debug.Log("[NPCChatter] Empty text, returning early");
+            return;
+        }
+
+        Debug.Log($"[NPCChatter] Processing user input: {text}");
+
+        if (userInput)
+        {
+            userInput.text = "";
+            userInput.SetTextWithoutNotify("");
+        }
+
+        if (dictationInput != null)
+            dictationInput.ClearAccumulatedText();
 
         history.Add(new Message(Role.User, text));
 
-        if (npcBubbleText) npcBubbleText.text = "";
-        Debug.Log("Text Removed");
-        var sb = new StringBuilder();
+        responseBuilder.Clear();
+        isStreamingResponse = false;
+        
+        MainThreadDispatcher.RunOnMainThread(() =>
+        {
+            if (npcBubbleText) npcBubbleText.text = "";
+            Debug.Log("[NPCChatter] Cleared NPC bubble text");
+        });
 
         var request = new ChatRequest(history, model: model, temperature: 0.6f);
-
-        // Stream words into the bubble
         var api = new OpenAIClient(new OpenAIAuthentication(apiKey));
 
-        // Use this client for your request
+        // Set talking state BEFORE response begins - NPC starts talking when text generation starts
+        Debug.Log("[NPCChatter] Starting response - setting isTalking to true");
+        SetTalkingState(true, "OnSendClicked - before streaming starts");
+        isStreamingResponse = true;
+
         var response = await api.ChatEndpoint.StreamCompletionAsync(
             request,
             async partial =>
@@ -60,23 +95,149 @@ public class NPCChatter : MonoBehaviour
                 var delta = partial.FirstChoice?.Delta?.ToString();
                 if (!string.IsNullOrEmpty(delta))
                 {
-                    Debug.Log("received response");
-                    sb.Append(delta);
-                    if (npcBubbleText) npcBubbleText.text = sb.ToString();
-                    Debug.Log("npcBubbleText updated");
+                    responseBuilder.Append(delta);
+                    string currentText = responseBuilder.ToString();
+
+                    MainThreadDispatcher.RunOnMainThread(() =>
+                    {
+                        if (npcBubbleText)
+                        {
+                            npcBubbleText.text = currentText;
+                            Debug.Log($"[NPCChatter] Updated bubble text (length: {currentText.Length})");
+                            // Keep isTalking true while text is streaming
+                            if (!isTalking)
+                            {
+                                Debug.Log("[NPCChatter] Text streaming detected - ensuring isTalking is true");
+                                SetTalkingState(true, "Streaming callback - text being generated");
+                            }
+                        }
+                    });
                 }
                 await Task.CompletedTask;
             });
 
-        // Save final message and trim old history to keep cost low
+        Debug.Log("[NPCChatter] Streaming completed");
+        isStreamingResponse = false;
         history.Add(response.FirstChoice.Message);
-        // Speak the full response aloud
-if (speaker != null)
-{
-    speaker.Stop(); // optional, stops previous speech if playing
-    speaker.Speak(sb.ToString());
-}
 
-        if (history.Count > 20) history.RemoveRange(1, history.Count - 20);
+        string finalResponse = responseBuilder.ToString();
+        Debug.Log($"[NPCChatter] Final response received (length: {finalResponse.Length}): {finalResponse.Substring(0, Mathf.Min(50, finalResponse.Length))}...");
+
+        // TTS code commented out - using text completion timing only
+        // bool ttsAvailable = speaker != null && !string.IsNullOrEmpty(finalResponse);
+        // 
+        // if (ttsAvailable)
+        // {
+        //     Debug.Log("[NPCChatter] TTS Speaker available - starting speech");
+        //     MainThreadDispatcher.RunOnMainThread(() =>
+        //     {
+        //         speaker.Stop();
+        //         speaker.Speak(finalResponse);
+        //         Debug.Log("[NPCChatter] TTS Speak() called");
+        //     });
+        //     
+        //     // Wait for TTS to complete
+        //     StartCoroutine(WaitForSpeechEnd());
+        // }
+        // else
+        // {
+        //     Debug.Log("[NPCChatter] TTS Speaker NOT available - using text completion timing");
+        //     // If TTS not available, wait a bit after text completes, then stop talking
+        //     StartCoroutine(WaitForTextCompletion());
+        // }
+
+        // Always use text completion timing since TTS is disabled
+        Debug.Log("[NPCChatter] Using text completion timing (TTS disabled)");
+        StartCoroutine(WaitForTextCompletion());
+        
+        if (history.Count > 20)
+            history.RemoveRange(1, history.Count - 20);
+    }
+
+    // TTS coroutine commented out - not used
+    // private System.Collections.IEnumerator WaitForSpeechEnd()
+    // {
+    //     Debug.Log("[NPCChatter] WaitForSpeechEnd() coroutine started");
+    //     
+    //     if (speaker == null)
+    //     {
+    //         Debug.LogWarning("[NPCChatter] Speaker is null in WaitForSpeechEnd - falling back to text completion");
+    //         StartCoroutine(WaitForTextCompletion());
+    //         yield break;
+    //     }
+    //
+    //     // Wait while speaker is speaking
+    //     float timeout = 30f; // Max 30 seconds
+    //     float elapsed = 0f;
+    //     
+    //     while (speaker.IsSpeaking && elapsed < timeout)
+    //     {
+    //         elapsed += Time.deltaTime;
+    //         yield return null;
+    //     }
+    //
+    //     if (elapsed >= timeout)
+    //     {
+    //         Debug.LogWarning("[NPCChatter] TTS timeout reached - stopping talking state");
+    //     }
+    //     else
+    //     {
+    //         Debug.Log("[NPCChatter] TTS completed - setting isTalking to false");
+    //     }
+    //
+    //     SetTalkingState(false, "WaitForSpeechEnd - TTS completed");
+    // }
+
+    private System.Collections.IEnumerator WaitForTextCompletion()
+    {
+        Debug.Log("[NPCChatter] WaitForTextCompletion() coroutine started");
+        
+        // Wait a short delay after text streaming completes to allow reading
+        // Adjust this delay based on response length
+        float baseDelay = 2f; // Base delay in seconds
+        float additionalDelay = Mathf.Min(responseBuilder.Length * 0.05f, 5f); // Up to 5 more seconds based on length
+        float totalDelay = baseDelay + additionalDelay;
+        
+        Debug.Log($"[NPCChatter] Waiting {totalDelay} seconds before stopping talking (text length: {responseBuilder.Length})");
+        
+        yield return new WaitForSeconds(totalDelay);
+        
+        Debug.Log("[NPCChatter] Text completion delay finished - setting isTalking to false");
+        SetTalkingState(false, "WaitForTextCompletion - delay completed");
+    }
+
+    private void SetTalkingState(bool talking, string source)
+    {
+        if (isTalking == talking)
+        {
+            Debug.Log($"[NPCChatter] isTalking already {talking} (from {source}) - skipping update");
+            return;
+        }
+
+        isTalking = talking;
+        Debug.Log($"[NPCChatter] Setting isTalking to {talking} (source: {source})");
+
+        if (animator != null)
+        {
+            if (animator.isActiveAndEnabled)
+            {
+                animator.SetBool(isTalkingParameterName, talking);
+                Debug.Log($"[NPCChatter] Animator.SetBool('{isTalkingParameterName}', {talking}) called successfully");
+            }
+            else
+            {
+                Debug.LogWarning($"[NPCChatter] Animator is not active/enabled - cannot set bool");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[NPCChatter] Animator is null - cannot set isTalking parameter");
+        }
+    }
+
+    // Public getter for isTalking
+    public bool IsTalking
+    {
+        get { return isTalking; }
     }
 }
