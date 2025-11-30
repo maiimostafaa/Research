@@ -5,14 +5,14 @@ using OpenAI;
 using OpenAI.Chat;
 using TMPro;
 using UnityEngine;
-// using Meta.WitAi.TTS.Utilities; // Commented out - TTS not used
+using Meta.WitAi.TTS.Utilities;
 
 public class NPCChatter : MonoBehaviour
 {
     string apiKey = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 
-    // [Header("Voice Output")]
-    // public TTSSpeaker speaker;   // Commented out - TTS not used
+    [Header("Voice Output")]
+    public TTSSpeaker speaker;   // drag your TTSSpeaker GameObject here in Inspector
 
     [Header("Animation")]
     public Animator animator;    // drag your NPC's Animator here in Inspector
@@ -83,7 +83,7 @@ public class NPCChatter : MonoBehaviour
         var request = new ChatRequest(history, model: model, temperature: 0.6f);
         var api = new OpenAIClient(new OpenAIAuthentication(apiKey));
 
-        // Set talking state BEFORE response begins - NPC starts talking when text generation starts
+        // Set talking state BEFORE response begins
         Debug.Log("[NPCChatter] Starting response - setting isTalking to true");
         SetTalkingState(true, "OnSendClicked - before streaming starts");
         isStreamingResponse = true;
@@ -104,12 +104,6 @@ public class NPCChatter : MonoBehaviour
                         {
                             npcBubbleText.text = currentText;
                             Debug.Log($"[NPCChatter] Updated bubble text (length: {currentText.Length})");
-                            // Keep isTalking true while text is streaming
-                            if (!isTalking)
-                            {
-                                Debug.Log("[NPCChatter] Text streaming detected - ensuring isTalking is true");
-                                SetTalkingState(true, "Streaming callback - text being generated");
-                            }
                         }
                     });
                 }
@@ -123,70 +117,65 @@ public class NPCChatter : MonoBehaviour
         string finalResponse = responseBuilder.ToString();
         Debug.Log($"[NPCChatter] Final response received (length: {finalResponse.Length}): {finalResponse.Substring(0, Mathf.Min(50, finalResponse.Length))}...");
 
-        // TTS code commented out - using text completion timing only
-        // bool ttsAvailable = speaker != null && !string.IsNullOrEmpty(finalResponse);
-        // 
-        // if (ttsAvailable)
-        // {
-        //     Debug.Log("[NPCChatter] TTS Speaker available - starting speech");
-        //     MainThreadDispatcher.RunOnMainThread(() =>
-        //     {
-        //         speaker.Stop();
-        //         speaker.Speak(finalResponse);
-        //         Debug.Log("[NPCChatter] TTS Speak() called");
-        //     });
-        //     
-        //     // Wait for TTS to complete
-        //     StartCoroutine(WaitForSpeechEnd());
-        // }
-        // else
-        // {
-        //     Debug.Log("[NPCChatter] TTS Speaker NOT available - using text completion timing");
-        //     // If TTS not available, wait a bit after text completes, then stop talking
-        //     StartCoroutine(WaitForTextCompletion());
-        // }
-
-        // Always use text completion timing since TTS is disabled
-        Debug.Log("[NPCChatter] Using text completion timing (TTS disabled)");
-        StartCoroutine(WaitForTextCompletion());
+        // Handle TTS if available, otherwise just use text completion
+        bool ttsAvailable = speaker != null && !string.IsNullOrEmpty(finalResponse);
+        
+        if (ttsAvailable)
+        {
+            Debug.Log("[NPCChatter] TTS Speaker available - starting speech");
+            MainThreadDispatcher.RunOnMainThread(() =>
+            {
+                speaker.Stop();
+                speaker.Speak(finalResponse);
+                Debug.Log("[NPCChatter] TTS Speak() called");
+            });
+            
+            // Wait for TTS to complete
+            StartCoroutine(WaitForSpeechEnd());
+        }
+        else
+        {
+            Debug.Log("[NPCChatter] TTS Speaker NOT available - using text completion timing");
+            // If TTS not available, wait a bit after text completes, then stop talking
+            StartCoroutine(WaitForTextCompletion());
+        }
         
         if (history.Count > 20)
             history.RemoveRange(1, history.Count - 20);
     }
 
-    // TTS coroutine commented out - not used
-    // private System.Collections.IEnumerator WaitForSpeechEnd()
-    // {
-    //     Debug.Log("[NPCChatter] WaitForSpeechEnd() coroutine started");
-    //     
-    //     if (speaker == null)
-    //     {
-    //         Debug.LogWarning("[NPCChatter] Speaker is null in WaitForSpeechEnd - falling back to text completion");
-    //         StartCoroutine(WaitForTextCompletion());
-    //         yield break;
-    //     }
-    //
-    //     // Wait while speaker is speaking
-    //     float timeout = 30f; // Max 30 seconds
-    //     float elapsed = 0f;
-    //     
-    //     while (speaker.IsSpeaking && elapsed < timeout)
-    //     {
-    //         elapsed += Time.deltaTime;
-    //         yield return null;
-    //     }
-    //
-    //     if (elapsed >= timeout)
-    //     {
-    //         Debug.LogWarning("[NPCChatter] TTS timeout reached - stopping talking state");
-    //     }
-    //     else
-    //     {
-    //         Debug.Log("[NPCChatter] TTS completed - setting isTalking to false");
-    //     }
-    //
-    //     SetTalkingState(false, "WaitForSpeechEnd - TTS completed");
-    // }
+    private System.Collections.IEnumerator WaitForSpeechEnd()
+    {
+        Debug.Log("[NPCChatter] WaitForSpeechEnd() coroutine started");
+        
+        if (speaker == null)
+        {
+            Debug.LogWarning("[NPCChatter] Speaker is null in WaitForSpeechEnd - falling back to text completion");
+            StartCoroutine(WaitForTextCompletion());
+            yield break;
+        }
+
+        // Wait while speaker is speaking
+        float timeout = 30f; // Max 30 seconds
+        float elapsed = 0f;
+        
+        while (speaker.IsSpeaking && elapsed < timeout)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (elapsed >= timeout)
+        {
+            Debug.LogWarning("[NPCChatter] TTS timeout reached - stopping talking state");
+        }
+        else
+        {
+            Debug.Log("[NPCChatter] TTS completed - setting isTalking to false");
+        }
+
+        SetTalkingState(false, "WaitForSpeechEnd - TTS completed");
+    }
 
     private System.Collections.IEnumerator WaitForTextCompletion()
     {
