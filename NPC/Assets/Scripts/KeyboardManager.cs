@@ -1,38 +1,73 @@
 using UnityEngine;
+using TMPro;
 
 public class KeyboardManager : MonoBehaviour
 {
-    [Header("Keyboard Settings")]
-    [SerializeField] private GameObject keyboardPrefab;      // Prefab of your keyboard
-    [SerializeField] private Transform keyboardSpawnPoint;   // Where you want it to appear in the scene
+    public Canvas keyboardCanvas;
+    public TMP_InputField inputField;
+    public OVRVirtualKeyboard virtualKeyboard;
+    public NPCChatter npcChatter;
+    public Transform userCamera;
+    public float distance = 1.2f;
 
-    private GameObject activeKeyboard;
-
-    // Call this when you want to show the keyboard
-    public void ShowKeyboard()
+    private void Awake()
     {
-        // If there's already a keyboard, do nothing
-        if (activeKeyboard != null)
-            return;
-
-        // Spawn the keyboard at the given position and rotation
-        if (keyboardPrefab != null && keyboardSpawnPoint != null)
+        keyboardCanvas.gameObject.SetActive(false);
+        // Subscribe to input field events instead of OVRVirtualKeyboard events
+        if (inputField != null)
         {
-            activeKeyboard = Instantiate(keyboardPrefab, keyboardSpawnPoint.position, keyboardSpawnPoint.rotation);
-        }
-        else
-        {
-            Debug.LogWarning("Keyboard prefab or spawn point not set in Inspector.");
+            inputField.onValueChanged.AddListener(HandleTextChanged);
+            inputField.onEndEdit.AddListener(HandleTextEndEdit);
         }
     }
 
-    // Call this when you want to hide or destroy the keyboard
-    public void HideKeyboard()
+    public void OpenKeyboard()
     {
-        if (activeKeyboard != null)
+        Vector3 flatForward = userCamera.forward;
+        flatForward.y = 0;
+
+        keyboardCanvas.transform.position =
+            userCamera.position + flatForward.normalized * distance;
+
+        keyboardCanvas.transform.LookAt(
+            keyboardCanvas.transform.position + flatForward);
+
+        inputField.text = "";
+        keyboardCanvas.gameObject.SetActive(true);
+        
+        // OVRVirtualKeyboard visibility is controlled by the GameObject's active state
+        // No need to call Show() method
+    }
+
+    public void CloseKeyboard()
+    {
+        keyboardCanvas.gameObject.SetActive(false);
+        // OVRVirtualKeyboard visibility is controlled by the GameObject's active state
+        // No need to call Hide() method
+    }
+
+    private void HandleTextChanged(string newText)
+    {
+        // Text is already updated in the input field, no need to set it again
+        // This handler can be used for additional logic if needed
+    }
+
+    private void HandleTextEndEdit(string text)
+    {
+        // Called when user finishes editing (e.g., presses Enter or submits)
+        // Note: This is called when the input field loses focus or Enter is pressed
+        // You can add logic here if needed, but SendMessage() is typically called from a button
+    }
+
+    public async void SendMessage()
+    {
+        string msg = inputField.text;
+
+        if (!string.IsNullOrEmpty(msg))
         {
-            Destroy(activeKeyboard);
-            activeKeyboard = null;
+            await npcChatter.SendMessageToNPC(msg);
         }
+
+        CloseKeyboard();
     }
 }

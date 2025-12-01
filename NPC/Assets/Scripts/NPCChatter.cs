@@ -34,7 +34,6 @@ public class NPCChatter : MonoBehaviour
     // Public boolean to track talking state
     [Header("Debug")]
     [SerializeField] private bool isTalking = false;
-    private bool isStreamingResponse = false;
 
     void Start()
     {
@@ -84,7 +83,6 @@ public class NPCChatter : MonoBehaviour
         Debug.Log($"[NPCChatter] Processing user input: {text}");
 
         responseBuilder.Clear();
-        isStreamingResponse = false;
         
         MainThreadDispatcher.RunOnMainThread(() =>
         {
@@ -98,7 +96,6 @@ public class NPCChatter : MonoBehaviour
         // Set talking state BEFORE response begins
         Debug.Log("[NPCChatter] Starting response - setting isTalking to true");
         SetTalkingState(true, "SendMessageToNPC - before streaming starts");
-        isStreamingResponse = true;
 
         var response = await api.ChatEndpoint.StreamCompletionAsync(
             request,
@@ -123,7 +120,6 @@ public class NPCChatter : MonoBehaviour
             });
 
         Debug.Log("[NPCChatter] Streaming completed");
-        isStreamingResponse = false;
         history.Add(response.FirstChoice.Message);
 
         string finalResponse = responseBuilder.ToString();
