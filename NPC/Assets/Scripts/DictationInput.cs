@@ -1,11 +1,9 @@
 using UnityEngine;
-using UnityEngine.UI;
 using Meta.WitAi;
 using Meta.WitAi.Dictation;
 using Meta.WitAi.Configuration;
 using Meta.WitAi.Data.Configuration;
 using Meta.WitAi.Events;
-// using Meta.WitAi.Requests; // Commented out - not needed for now
 using Oculus.Voice.Dictation;
 using TMPro;
 
@@ -22,17 +20,19 @@ public class DictationInput : MonoBehaviour
 {
     [Header("Dictation Components")]
     public AppDictationExperience dictation; // drag [BuildingBlock] Dictation here
-    public TMP_InputField userInput;         // drag your text input field here
+    
+    [Header("NPC Communication")]
+    public NPCChatter npcChatter;            // drag your NPCChatter component here
     
     [Header("UI Feedback")]
-    public TMP_Text statusText;              // Optional: Text to show status (e.g., "Listening...", "Processing...")
-    public Image micButtonImage;            // Optional: Image component of mic button for color changes
-    public Color idleColor = Color.white;
-    public Color listeningColor = Color.red;
-    public Color processingColor = Color.yellow;
-    public Color errorColor = Color.magenta;
+    public TMP_Text statusText;              // Text to show status (e.g., "Listening...", "Processing...")
     
-    private string accumulatedText = "";     // stores text across multiple recording sessions
+    [Header("Collision Detection")]
+    [Tooltip("Drag the specific collider (2D or 3D) that should trigger dictation")]
+    public Collider targetCollider3D;        // For 3D colliders (CircleCollider, BoxCollider, etc.)
+    public Collider2D targetCollider2D;      // For 2D colliders (CircleCollider2D, BoxCollider2D, etc.)
+    
+    private string currentTranscription = ""; // stores the current transcription session
     private DictationState currentState = DictationState.Idle;
     private bool isProcessingRequest = false;
 
@@ -43,7 +43,7 @@ public class DictationInput : MonoBehaviour
         // Adjust "Endpoint Speech Threshold" (silence detection, try 1.5-3 seconds)
         // Adjust "Max Recording Time" (maximum recording length, try 120 seconds)
         
-        UpdateUIState(DictationState.Idle);
+        UpdateStatusText(DictationState.Idle);
     }
 
     void OnEnable()
@@ -99,11 +99,8 @@ public class DictationInput : MonoBehaviour
         Debug.Log("Dictation: Started listening");
         currentState = DictationState.Listening;
         isProcessingRequest = false;
-        
-        // Sync current keyboard input into accumulated text when starting to listen
-        SyncKeyboardInput();
-        
-        UpdateUIState(DictationState.Listening);
+        currentTranscription = ""; // Reset transcription for new session
+        UpdateStatusText(DictationState.Listening);
     }
 
     private void OnStoppedListening()
@@ -112,7 +109,7 @@ public class DictationInput : MonoBehaviour
         // Only update to idle if we're not processing a request
         if (!isProcessingRequest)
         {
-            UpdateUIState(DictationState.Idle);
+            UpdateStatusText(DictationState.Idle);
         }
     }
 
@@ -123,7 +120,7 @@ public class DictationInput : MonoBehaviour
         // If we're not listening anymore, go to idle
         if (!dictation.Active)
         {
-            UpdateUIState(DictationState.Idle);
+            UpdateStatusText(DictationState.Idle);
         }
     }
 
@@ -132,7 +129,7 @@ public class DictationInput : MonoBehaviour
         Debug.LogError($"Dictation Error: {error} - {message}");
         currentState = DictationState.Error;
         isProcessingRequest = false;
-        UpdateUIState(DictationState.Error);
+        UpdateStatusText(DictationState.Error);
         
         // Auto-recover after a short delay
         Invoke(nameof(ResetToIdle), 2f);
@@ -142,7 +139,7 @@ public class DictationInput : MonoBehaviour
     {
         if (currentState == DictationState.Error)
         {
-            UpdateUIState(DictationState.Idle);
+            UpdateStatusText(DictationState.Idle);
         }
     }
 
@@ -150,30 +147,8 @@ public class DictationInput : MonoBehaviour
     private void OnPartialTranscription(string transcription)
     {
         Debug.Log("Partial: " + transcription);
-
-        // Update UI on main thread - but DON'T update accumulatedText yet
-        // Only show preview, final text will be added in OnDictationComplete
-        MainThreadDispatcher.RunOnMainThread(() =>
-        {
-            if (userInput != null)
-            {
-                // Show accumulated text + current partial transcription (preview only)
-                string displayText = accumulatedText;
-                if (!string.IsNullOrEmpty(accumulatedText) && !string.IsNullOrEmpty(transcription))
-                {
-                    displayText += " ";
-                }
-                displayText += transcription;
-                
-                // Only update if the field is not currently focused (to avoid conflicts with keyboard input)
-                if (!userInput.isFocused)
-                {
-                    userInput.text = displayText;
-                    userInput.SetTextWithoutNotify(displayText); // Force UI update
-                    Debug.Log("Partial transcription preview updated in UI: " + displayText);
-                }
-            }
-        });
+        // Don't update any UI - just store for reference
+        currentTranscription = transcription;
     }
 
     // Called when user finishes speaking (final result)
@@ -184,69 +159,49 @@ public class DictationInput : MonoBehaviour
         // Update UI on main thread
         MainThreadDispatcher.RunOnMainThread(() =>
         {
-            if (userInput != null && !string.IsNullOrEmpty(transcription))
+            if (!string.IsNullOrEmpty(transcription))
             {
-                // If input field is focused, get current text (may have keyboard input)
-                string currentText = userInput.isFocused ? userInput.text : accumulatedText;
+                currentTranscription = transcription;
                 
-                // Check if current text already contains this transcription (avoid duplicates)
-                // If current text ends with the transcription, don't add it again
-                if (!currentText.EndsWith(transcription))
+                // Send text directly to NPC model
+                if (npcChatter != null)
                 {
-                    // If current text differs from accumulated text, user typed something new
-                    // Merge: use current text as base, then append dictation
-                    if (currentText != accumulatedText && !string.IsNullOrEmpty(currentText))
-                    {
-                        accumulatedText = currentText;
-                    }
-                    
-                    // Add this transcription to accumulated text (only if not already there)
-                    if (!string.IsNullOrEmpty(accumulatedText))
-                    {
-                        accumulatedText += " ";
-                    }
-                    accumulatedText += transcription;
+                    Debug.Log("Sending transcription to NPC: " + transcription);
+                    SendToNPC(transcription);
                 }
                 else
                 {
-                    // Transcription already in text, just use current accumulated text
-                    accumulatedText = currentText;
+                    Debug.LogWarning("NPCChatter component not assigned! Cannot send transcription.");
                 }
-                
-                // Update input field with accumulated text
-                userInput.text = accumulatedText;
-                userInput.SetTextWithoutNotify(accumulatedText); // Force UI update
-                Debug.Log("Complete transcription updated in UI: " + accumulatedText);
             }
             
             // Update state after receiving final transcription
             isProcessingRequest = false;
             if (!dictation.Active)
             {
-                UpdateUIState(DictationState.Idle);
+                UpdateStatusText(DictationState.Idle);
             }
         });
     }
-
-    private void UpdateUIState(DictationState newState)
+    
+    private void UpdateStatusText(DictationState newState)
     {
         currentState = newState;
         
-        // Update UI immediately - try MainThreadDispatcher first, but fallback to direct update
+        // Update status text on main thread
         try
         {
-            MainThreadDispatcher.RunOnMainThread(() => UpdateUIStateInternal(newState));
+            MainThreadDispatcher.RunOnMainThread(() => UpdateStatusTextInternal(newState));
         }
         catch
         {
             // If MainThreadDispatcher doesn't exist or fails, update directly (we're likely on main thread)
-            UpdateUIStateInternal(newState);
+            UpdateStatusTextInternal(newState);
         }
     }
     
-    private void UpdateUIStateInternal(DictationState newState)
+    private void UpdateStatusTextInternal(DictationState newState)
     {
-        // Update status text
         if (statusText != null)
         {
             switch (newState)
@@ -269,37 +224,29 @@ public class DictationInput : MonoBehaviour
             }
             Debug.Log($"Status text updated: {statusText.text}");
         }
+    }
+    
+    // Helper method to send text to NPC
+    private void SendToNPC(string text)
+    {
+        if (npcChatter == null)
+        {
+            Debug.LogWarning("NPCChatter not assigned! Cannot send transcription.");
+            return;
+        }
         
-        // Update button color
-        if (micButtonImage != null)
+        if (string.IsNullOrEmpty(text))
         {
-            Color targetColor = idleColor;
-            switch (newState)
-            {
-                case DictationState.Idle:
-                    targetColor = idleColor;
-                    break;
-                case DictationState.Starting:
-                case DictationState.Listening:
-                    targetColor = listeningColor;
-                    break;
-                case DictationState.Processing:
-                    targetColor = processingColor;
-                    break;
-                case DictationState.Error:
-                    targetColor = errorColor;
-                    break;
-            }
-            micButtonImage.color = targetColor;
-            Debug.Log($"Mic button color updated to {targetColor} for state {newState}. Image component: {(micButtonImage != null ? "Found" : "NULL")}");
+            Debug.LogWarning("Empty transcription, not sending to NPC.");
+            return;
         }
-        else
-        {
-            Debug.LogWarning("micButtonImage is not assigned in DictationInput component!");
-        }
+        
+        // Send text directly to NPC using the new method (fire-and-forget)
+        _ = npcChatter.SendMessageToNPC(text);
     }
 
-    // Call this from your microphone button's OnClick event
+
+    // Call this from your button's OnClick event or collision detection
     public void ToggleDictation()
     {
         if (dictation == null)
@@ -315,44 +262,68 @@ public class DictationInput : MonoBehaviour
                 // Stop recording
                 Debug.Log("Stopping dictation...");
                 dictation.Deactivate();
-                UpdateUIState(DictationState.Idle);
+                UpdateStatusText(DictationState.Idle);
             }
             else
             {
-                // Start recording (keeps previous text)
+                // Start recording
                 Debug.Log("Starting dictation...");
-                UpdateUIState(DictationState.Starting);
+                currentTranscription = ""; // Reset transcription
+                UpdateStatusText(DictationState.Starting);
                 dictation.Activate();
             }
         }
         catch (System.Exception e)
         {
             Debug.LogError($"Error toggling dictation: {e.Message}");
-            UpdateUIState(DictationState.Error);
+        }
+    }
+    
+    // Collision detection - only react to the target collider (3D)
+    private void OnTriggerEnter(Collider other)
+    {
+        // Only react if this is the target collider
+        if (targetCollider3D != null && other == targetCollider3D)
+        {
+            Debug.Log("Target collider (3D) triggered - starting dictation");
+            ToggleDictation();
+        }
+    }
+    
+    private void OnCollisionEnter(Collision collision)
+    {
+        // Only react if this is the target collider
+        if (targetCollider3D != null && collision.collider == targetCollider3D)
+        {
+            Debug.Log("Target collider (3D) collided - starting dictation");
+            ToggleDictation();
+        }
+    }
+    
+    // Collision detection - only react to the target collider (2D)
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        // Only react if this is the target collider
+        if (targetCollider2D != null && other == targetCollider2D)
+        {
+            Debug.Log("Target collider (2D) triggered - starting dictation");
+            ToggleDictation();
+        }
+    }
+    
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        // Only react if this is the target collider
+        if (targetCollider2D != null && collision.collider == targetCollider2D)
+        {
+            Debug.Log("Target collider (2D) collided - starting dictation");
+            ToggleDictation();
         }
     }
 
-    // Optional: Call this to clear the accumulated text (e.g., after sending message)
+    // Optional: Call this to clear the current transcription
     public void ClearAccumulatedText()
     {
-        accumulatedText = "";
-        MainThreadDispatcher.RunOnMainThread(() =>
-        {
-            if (userInput != null)
-            {
-                userInput.text = "";
-                userInput.SetTextWithoutNotify(""); // Force UI update
-            }
-        });
-    }
-    
-    // Sync keyboard input with accumulated text
-    public void SyncKeyboardInput()
-    {
-        if (userInput != null)
-        {
-            // Update accumulated text from keyboard input
-            accumulatedText = userInput.text;
-        }
+        currentTranscription = "";
     }
 }

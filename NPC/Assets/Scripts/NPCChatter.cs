@@ -69,7 +69,19 @@ public class NPCChatter : MonoBehaviour
         if (dictationInput != null)
             dictationInput.ClearAccumulatedText();
 
-        history.Add(new Message(Role.User, text));
+        await SendMessageToNPC(text);
+    }
+    
+    // New method to send message directly from string (for dictation input)
+    public async Task SendMessageToNPC(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            Debug.Log("[NPCChatter] Empty text, returning early");
+            return;
+        }
+
+        Debug.Log($"[NPCChatter] Processing user input: {text}");
 
         responseBuilder.Clear();
         isStreamingResponse = false;
@@ -85,7 +97,7 @@ public class NPCChatter : MonoBehaviour
 
         // Set talking state BEFORE response begins
         Debug.Log("[NPCChatter] Starting response - setting isTalking to true");
-        SetTalkingState(true, "OnSendClicked - before streaming starts");
+        SetTalkingState(true, "SendMessageToNPC - before streaming starts");
         isStreamingResponse = true;
 
         var response = await api.ChatEndpoint.StreamCompletionAsync(
