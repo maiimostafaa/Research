@@ -22,8 +22,12 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 3,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            },
             {
               "$type": "Document",
               "DocumentIndex": 1,
@@ -34,8 +38,7 @@
               "RelativeToolTip": "Assets\\Scripts\\DictationInput.cs",
               "ViewState": "AgIAAFwAAAAAAAAAAAAiwGUAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-11-10T05:30:55.557Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-11-10T05:30:55.557Z"
             },
             {
               "$type": "Document",
@@ -55,16 +58,12 @@
               "Title": "NPCChatter.cs",
               "DocumentMoniker": "C:\\Users\\Stanford VHIL\\Documents\\GitHub\\Research\\NPC\\Assets\\Scripts\\NPCChatter.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\NPCChatter.cs",
-              "ToolTip": "C:\\Users\\Stanford VHIL\\Documents\\GitHub\\Research\\NPC\\Assets\\Scripts\\NPCChatter.cs*",
-              "RelativeToolTip": "Assets\\Scripts\\NPCChatter.cs*",
+              "ToolTip": "C:\\Users\\Stanford VHIL\\Documents\\GitHub\\Research\\NPC\\Assets\\Scripts\\NPCChatter.cs",
+              "RelativeToolTip": "Assets\\Scripts\\NPCChatter.cs",
               "ViewState": "AgIAACoAAAAAAAAAAAAAAFYAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-10-31T00:14:57.549Z",
               "EditorCaption": ""
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
             }
           ]
         }
